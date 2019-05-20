@@ -1,0 +1,186 @@
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Threading.Tasks;
+using System.Data.SqlClient;
+using Microsoft.Extensions.Logging;
+using es.Model;
+
+namespace es.BLL {
+
+	public partial class Goods {
+
+		internal static readonly es.DAL.Goods dal = new es.DAL.Goods();
+		internal static readonly int itemCacheTimeout;
+
+		static Goods() {
+			if (!int.TryParse(SqlHelper.CacheStrategy["Timeout_Goods"], out itemCacheTimeout))
+				int.TryParse(SqlHelper.CacheStrategy["Timeout"], out itemCacheTimeout);
+		}
+
+		#region delete, update, insert
+
+		public static GoodsInfo Delete(int Id) {
+			var item = dal.Delete(Id);
+			if (itemCacheTimeout > 0) RemoveCache(item);
+			return item;
+		}
+		public static List<GoodsInfo> DeleteByCategory_id(int Category_id) {
+			var items = dal.DeleteByCategory_id(Category_id);
+			if (itemCacheTimeout > 0) RemoveCache(items);
+			return items;
+		}
+
+		#region enum _
+		public enum _ {
+			Id = 1, 
+			Category_id, 
+			Content, 
+			Create_time, 
+			Imgs, 
+			Stock, 
+			Title, 
+			Update_time
+		}
+		#endregion
+
+		public static int Update(GoodsInfo item, _ ignore1 = 0, _ ignore2 = 0, _ ignore3 = 0) => Update(item, new[] { ignore1, ignore2, ignore3 });
+		public static int Update(GoodsInfo item, _[] ignore) => dal.Update(item, ignore?.Where(a => a > 0).Select(a => Enum.GetName(typeof(_), a)).ToArray()).ExecuteNonQuery();
+		public static es.DAL.Goods.SqlUpdateBuild UpdateDiy(int Id) => new es.DAL.Goods.SqlUpdateBuild(new List<GoodsInfo> { new GoodsInfo { Id = Id } }, false);
+		public static es.DAL.Goods.SqlUpdateBuild UpdateDiy(List<GoodsInfo> dataSource) => new es.DAL.Goods.SqlUpdateBuild(dataSource, true);
+		public static es.DAL.Goods.SqlUpdateBuild UpdateDiyDangerous => new es.DAL.Goods.SqlUpdateBuild();
+
+		/// <summary>
+		/// 适用字段较少的表；避规后续改表风险，字段数较大请改用 Goods.Insert(GoodsInfo item)
+		/// </summary>
+		[Obsolete]
+		public static GoodsInfo Insert(int? Id, int? Category_id, string Content, string Imgs, int? Stock, string Title) {
+			return Insert(new GoodsInfo {
+				Id = Id, 
+				Category_id = Category_id, 
+				Content = Content, 
+				Imgs = Imgs, 
+				Stock = Stock, 
+				Title = Title});
+		}
+		public static GoodsInfo Insert(GoodsInfo item) {
+			if (item.Create_time == null) item.Create_time = DateTime.Now;
+			if (item.Update_time == null) item.Update_time = DateTime.Now;
+			item = dal.Insert(item);
+			if (itemCacheTimeout > 0) RemoveCache(item);
+			return item;
+		}
+		public static List<GoodsInfo> Insert(IEnumerable<GoodsInfo> items) {
+			foreach (var item in items) if (item != null && item.Create_time == null) item.Create_time = DateTime.Now;
+			foreach (var item in items) if (item != null && item.Update_time == null) item.Update_time = DateTime.Now;
+			var newitems = dal.Insert(items);
+			if (itemCacheTimeout > 0) RemoveCache(newitems);
+			return newitems;
+		}
+		internal static void RemoveCache(GoodsInfo item) => RemoveCache(item == null ? null : new [] { item });
+		internal static void RemoveCache(IEnumerable<GoodsInfo> items) {
+			if (itemCacheTimeout <= 0 || items == null || items.Any() == false) return;
+			var keys = new string[items.Count() * 1];
+			var keysIdx = 0;
+			foreach (var item in items) {
+				keys[keysIdx++] = string.Concat("es_BLL:Goods:", item.Id);
+			}
+			if (SqlHelper.Instance.CurrentThreadTransaction != null) SqlHelper.Instance.PreRemove(keys);
+			else SqlHelper.CacheRemove(keys);
+		}
+		#endregion
+
+		public static GoodsInfo GetItem(int Id) => SqlHelper.CacheShell(string.Concat("es_BLL:Goods:", Id), itemCacheTimeout, () => Select.WhereId(Id).ToOne());
+
+		public static List<GoodsInfo> GetItems() => Select.ToList();
+		public static SelectBuild Select => new SelectBuild(dal);
+		public static SelectBuild SelectAs(string alias = "a") => Select.As(alias);
+		public static List<GoodsInfo> GetItemsByCategory_id(params int?[] Category_id) => Select.WhereCategory_id(Category_id).ToList();
+		public static List<GoodsInfo> GetItemsByCategory_id(int?[] Category_id, int limit) => Select.WhereCategory_id(Category_id).Limit(limit).ToList();
+		public static SelectBuild SelectByCategory_id(params int?[] Category_id) => Select.WhereCategory_id(Category_id);
+		public static List<GoodsInfo> GetItemsById(params int?[] Id) => Select.WhereId(Id).ToList();
+		public static List<GoodsInfo> GetItemsById(int?[] Id, int limit) => Select.WhereId(Id).Limit(limit).ToList();
+		public static SelectBuild SelectById(params int?[] Id) => Select.WhereId(Id);
+
+		#region async
+		async public static Task<List<GoodsInfo>> DeleteByCategory_idAsync(int Category_id) {
+			var items = await dal.DeleteByCategory_idAsync(Category_id);
+			if (itemCacheTimeout > 0) await RemoveCacheAsync(items);
+			return items;
+		}
+		async public static Task<GoodsInfo> DeleteAsync(int Id) {
+			var item = await dal.DeleteAsync(Id);
+			if (itemCacheTimeout > 0) await RemoveCacheAsync(item);
+			return item;
+		}
+		async public static Task<GoodsInfo> GetItemAsync(int Id) => await SqlHelper.CacheShellAsync(string.Concat("es_BLL:Goods:", Id), itemCacheTimeout, () => Select.WhereId(Id).ToOneAsync());
+		public static Task<int> UpdateAsync(GoodsInfo item, _ ignore1 = 0, _ ignore2 = 0, _ ignore3 = 0) => UpdateAsync(item, new[] { ignore1, ignore2, ignore3 });
+		public static Task<int> UpdateAsync(GoodsInfo item, _[] ignore) => dal.Update(item, ignore?.Where(a => a > 0).Select(a => Enum.GetName(typeof(_), a)).ToArray()).ExecuteNonQueryAsync();
+
+		/// <summary>
+		/// 适用字段较少的表；避规后续改表风险，字段数较大请改用 Goods.Insert(GoodsInfo item)
+		/// </summary>
+		[Obsolete]
+		public static Task<GoodsInfo> InsertAsync(int? Id, int? Category_id, string Content, string Imgs, int? Stock, string Title) {
+			return InsertAsync(new GoodsInfo {
+				Id = Id, 
+				Category_id = Category_id, 
+				Content = Content, 
+				Imgs = Imgs, 
+				Stock = Stock, 
+				Title = Title});
+		}
+		async public static Task<GoodsInfo> InsertAsync(GoodsInfo item) {
+			if (item.Create_time == null) item.Create_time = DateTime.Now;
+			if (item.Update_time == null) item.Update_time = DateTime.Now;
+			item = await dal.InsertAsync(item);
+			if (itemCacheTimeout > 0) await RemoveCacheAsync(item);
+			return item;
+		}
+		async public static Task<List<GoodsInfo>> InsertAsync(IEnumerable<GoodsInfo> items) {
+			foreach (var item in items) if (item != null && item.Create_time == null) item.Create_time = DateTime.Now;
+			foreach (var item in items) if (item != null && item.Update_time == null) item.Update_time = DateTime.Now;
+			var newitems = await dal.InsertAsync(items);
+			if (itemCacheTimeout > 0) await RemoveCacheAsync(newitems);
+			return newitems;
+		}
+		internal static Task RemoveCacheAsync(GoodsInfo item) => RemoveCacheAsync(item == null ? null : new [] { item });
+		async internal static Task RemoveCacheAsync(IEnumerable<GoodsInfo> items) {
+			if (itemCacheTimeout <= 0 || items == null || items.Any() == false) return;
+			var keys = new string[items.Count() * 1];
+			var keysIdx = 0;
+			foreach (var item in items) {
+				keys[keysIdx++] = string.Concat("es_BLL:Goods:", item.Id);
+			}
+			await SqlHelper.CacheRemoveAsync(keys);
+		}
+
+		public static Task<List<GoodsInfo>> GetItemsAsync() => Select.ToListAsync();
+		public static Task<List<GoodsInfo>> GetItemsByCategory_idAsync(params int?[] Category_id) => Select.WhereCategory_id(Category_id).ToListAsync();
+		public static Task<List<GoodsInfo>> GetItemsByCategory_idAsync(int?[] Category_id, int limit) => Select.WhereCategory_id(Category_id).Limit(limit).ToListAsync();
+		public static Task<List<GoodsInfo>> GetItemsByIdAsync(params int?[] Id) => Select.WhereId(Id).ToListAsync();
+		public static Task<List<GoodsInfo>> GetItemsByIdAsync(int?[] Id, int limit) => Select.WhereId(Id).Limit(limit).ToListAsync();
+		#endregion
+
+		public partial class SelectBuild : SelectBuild<GoodsInfo, SelectBuild> {
+			public SelectBuild WhereCategory_id(params int?[] Category_id) => this.Where1Or(@"a.[category_id] = {0}", Category_id);
+			public SelectBuild WhereCategory_id(Category.SelectBuild select, bool isNotIn = false) => this.Where($@"a.[category_id] {(isNotIn ? "NOT IN" : "IN")} ({select.ToString(@"[id]")})");
+			public SelectBuild WhereId(params int?[] Id) => this.Where1Or(@"a.[id] = {0}", Id);
+			public SelectBuild WhereId(Goods_tag.SelectBuild select, bool isNotIn = false) => this.Where($@"a.[id] {(isNotIn ? "NOT IN" : "IN")} ({select.ToString(@"[goods_id]")})");
+			public SelectBuild WhereContentLike(string pattern, bool isNotLike = false) => this.Where($@"a.[content] {(isNotLike ? "NOT LIKE" : "LIKE")} {{0}}", pattern);
+			public SelectBuild WhereCreate_timeRange(DateTime? begin) => base.Where(@"a.[create_time] >= {0}", begin);
+			public SelectBuild WhereCreate_timeRange(DateTime? begin, DateTime? end) => end == null ? this.WhereCreate_timeRange(begin) : base.Where(@"a.[create_time] between {0} and {1}", begin, end);
+			public SelectBuild WhereImgsLike(string pattern, bool isNotLike = false) => this.Where($@"a.[imgs] {(isNotLike ? "NOT LIKE" : "LIKE")} {{0}}", pattern);
+			public SelectBuild WhereStock(params int?[] Stock) => this.Where1Or(@"a.[stock] = {0}", Stock);
+			public SelectBuild WhereStockRange(int? begin) => base.Where(@"a.[stock] >= {0}", begin);
+			public SelectBuild WhereStockRange(int? begin, int? end) => end == null ? this.WhereStockRange(begin) : base.Where(@"a.[stock] between {0} and {1}", begin, end);
+			public SelectBuild WhereTitle(params string[] Title) => this.Where1Or(@"a.[title] = {0}", Title);
+			public SelectBuild WhereTitleLike(string pattern, bool isNotLike = false) => this.Where($@"a.[title] {(isNotLike ? "NOT LIKE" : "LIKE")} {{0}}", pattern);
+			public SelectBuild WhereUpdate_timeRange(DateTime? begin) => base.Where(@"a.[update_time] >= {0}", begin);
+			public SelectBuild WhereUpdate_timeRange(DateTime? begin, DateTime? end) => end == null ? this.WhereUpdate_timeRange(begin) : base.Where(@"a.[update_time] between {0} and {1}", begin, end);
+			public SelectBuild(IDAL dal) : base(dal, SqlHelper.Instance) { }
+		}
+	}
+}
